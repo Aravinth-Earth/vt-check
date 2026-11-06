@@ -45,13 +45,24 @@ def with_key(monkeypatch, plugin):
 
 def test_no_key_reports_unverified_and_install_help(tmp_path, plugin, ctx, monkeypatch):
     monkeypatch.setattr(plugin.tools, "_secret", lambda name: None)
-    p = tmp_path / "a.zip"
-    p.write_bytes(b"PK\x03\x04")
+    p = tmp_path / "a.txt"
+    p.write_bytes(b"plain text, no archive findings")
     out = json.loads(ctx.tools["vt_check_file"]["handler"]({"path": str(p)}))
     assert out["ok"] is True
     assert out["verdict"] == "unverified"
     assert out["virustotal"]["error"] == "no_api_key"
     assert "virustotal.com/gui/my-apikey" in out["virustotal"]["help"]
+
+
+def test_no_key_still_reports_local_red_flags(tmp_path, plugin, ctx, monkeypatch):
+    """Offline forensics must not be downgraded to 'unverified' when it finds something."""
+    monkeypatch.setattr(plugin.tools, "_secret", lambda name: None)
+    p = tmp_path / "mixed.zip"
+    with __import__("zipfile").ZipFile(p, "w") as zf:
+        zf.writestr("../escape.sh", "#!/bin/sh\n")
+    out = json.loads(ctx.tools["vt_check_file"]["handler"]({"path": str(p)}))
+    assert out["verdict"] == "suspicious"
+    assert out["local_verdict"] == "suspicious"
 
 
 def test_key_is_read_through_secret_scope_only(monkeypatch, plugin, ctx, tmp_path):

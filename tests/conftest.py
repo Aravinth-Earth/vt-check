@@ -9,8 +9,10 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]   # repo root
 PLUGIN_DIR = ROOT / "plugin"                  # the installable Hermes plugin directory
-if str(PLUGIN_DIR) not in sys.path:
-    sys.path.insert(0, str(PLUGIN_DIR))
+CLI_DIR = ROOT / "bin"                        # the terminal entry point (not part of the plugin)
+for _p in (PLUGIN_DIR, CLI_DIR):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 from vtcheck import register, schemas, tools, vtcore  # noqa: E402
 

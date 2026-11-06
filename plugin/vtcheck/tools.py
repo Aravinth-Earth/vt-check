@@ -163,8 +163,8 @@ def check_file(args: dict, **kwargs) -> str:
             vt_report = {"ok": False, "error": "vt_error", "help": str(exc)}
 
     verdict = vt.merge_verdict(findings, vt_report.get("verdict") if vt_report.get("ok") else None)
-    if not key:
-        verdict = "unverified"
+    if not key and verdict == "clean":
+        verdict = "unverified"   # nothing found, but nothing verified either
 
     local_level = "clean"
     if any(f["level"] == "warn" for f in findings):

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2 — 2026-11-06
+
+- Added a command-line entry point (`bin/vt-check` → `vtcheck.cli`): one command for files, folders,
+  URLs, `--json`, `--no-vt`. Exit codes 0/1/2/3, 24 h local cache so repeat checks cost no quota, and
+  free-tier pacing (4 requests/min) for fresh lookups. The CLI resolves the key from `VT_API_KEY` or
+  through Hermes's own dotenv loader — it never parses `.env` itself.
+- Tests for the CLI (exit codes, cache, URL path, directory walk).
+
 ## 0.1.1 — 2026-11-06
 
 - Drop the `provides_middleware` key from `plugin.yaml`: this Hermes build does not know it and logged a

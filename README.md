@@ -11,6 +11,24 @@ hermes plugins install Aravinth-Earth/vt-check   # or: hermes plugins install vt
 hermes plugins enable vt-check
 ```
 
+## Command line (fastest path)
+
+The same logic also runs as a terminal command — no agent turn needed:
+
+```bash
+ln -sf "$(pwd)/bin/vt-check" ~/.local/bin/vt-check     # once
+
+vt-check ~/Downloads/thing.zip          # one command, ~1s on a cache hit
+vt-check ~/Downloads --recursive        # whole folder
+vt-check --url https://example.com      # read-only URL reputation
+vt-check --no-vt FILE                   # offline only: archive forensics, no network, no key
+vt-check FILE --json                    # machine-readable
+```
+
+Exit codes: `0` clean · `1` suspicious/malicious · `2` unverified or error · `3` caution.
+Results are cached for 24 h (`~/.cache/vt-check/cache.json`), so repeat checks are instant; the free
+tier is 4 requests/min, and multiple fresh lookups are paced accordingly.
+
 ## Privacy model
 
 | Concern | Behaviour |
