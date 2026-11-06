@@ -144,7 +144,7 @@ def test_bad_key_surfaces_as_vt_error(tmp_path, plugin, ctx, with_key, fake_http
 def test_url_seen_and_unseen(tmp_path, plugin, ctx, with_key, fake_http, monkeypatch):
     monkeypatch.setattr(plugin.tools, "_secret", lambda n: "k")
     fake_http(lambda *a: (200, {"data": {"attributes": {
-        "last_analysis_stats": {"malicious": 2, "harmless": 60},
+        "last_analysis_stats": {"malicious": 5, "harmless": 60},
         "categories": {"x": "phishing"}, "reputation": -5,
         "times_submitted": 3, "last_analysis_date": 1710000000}}}))
     seen = json.loads(ctx.tools["vt_check_url"]["handler"]({"url": "https://evil.example/a"}))

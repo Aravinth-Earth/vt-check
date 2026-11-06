@@ -23,6 +23,7 @@ RANK = {"clean": 0, "unknown": 1, "unverified": 2, "caution": 2, "suspicious": 3
 EXIT = {"clean": 0, "caution": 3, "suspicious": 1, "malicious": 1, "unknown": 2, "unverified": 2, "error": 2}
 FREE_TIER_GAP = 16.0   # 4 requests/min
 CACHE_TTL = 24 * 3600
+CACHE_VERSION = 2   # bump when verdict logic changes, so stale verdicts are re-derived
 
 
 def _cache_path() -> Path:
@@ -50,13 +51,15 @@ def _cache_save(cache: dict) -> None:
 
 def _cached(cache: dict, key: str) -> dict | None:
     entry = cache.get(key)
-    if entry and time.time() - entry.get("_ts", 0) < CACHE_TTL:
+    if not entry or entry.get("v") != CACHE_VERSION:
+        return None
+    if time.time() - entry.get("_ts", 0) < CACHE_TTL:
         return entry.get("data")
     return None
 
 
 def _store(cache: dict, key: str, data: dict) -> None:
-    cache[key] = {"_ts": time.time(), "data": data}
+    cache[key] = {"_ts": time.time(), "v": CACHE_VERSION, "data": data}
     if len(cache) > 500:
         keep = sorted(cache.items(), key=lambda kv: kv[1].get("_ts", 0))[-500:]
         cache.clear()
@@ -212,6 +215,15 @@ def main(argv: list[str] | None = None) -> int:
             line = f"{r['verdict'].upper():11} {name[:48]:50} {why[:70]}"
             if args.quiet:
                 print(line)
+            elif "path" not in r:      # URL / domain / IP result
+                print(f"\n{r.get('target') or raw}  [{r.get('queried_as', 'indicator')}]")
+                for k in ("as_owner", "country", "network", "registrar"):
+                    if r.get("virustotal", {}).get(k):
+                        print(f"  {k.replace('_', ' '):9} {r['virustotal'][k]}")
+                if r.get("virustotal", {}).get("categories"):
+                    print(f"  categories {', '.join(str(v) for v in list(r['virustotal']['categories'].values())[:4])}")
+                print(f"   VT  {str(vtinfo.get('status', '')).upper()} — {why}")
+                print(f"  => {r['verdict'].upper()}")
             else:
                 print(f"\n{name}  [{human(r.get('size', 0))}, {r.get('content_type', '?')}]")
                 print(f"  sha256  {r.get('sha256', '-')}")

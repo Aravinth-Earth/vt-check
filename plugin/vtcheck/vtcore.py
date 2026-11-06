@@ -207,10 +207,25 @@ def archive_findings(path: Path, head: bytes) -> list:
 # -------------------------------------------------------------------- verdicts
 
 
-def verdict_from_stats(stats: dict) -> tuple[str, str]:
+def verdict_from_stats(stats: dict, indicator: bool = False) -> tuple[str, str]:
+    """Map VirusTotal stats to a verdict.
+
+    Files: any detection is a red flag. URLs/domains/IPs: single-engine hits are mostly false
+    positives, so the malicious verdict needs either ≥3 engines or ≥5% of responders.
+    """
     total = sum(v for v in stats.values() if isinstance(v, int))
     malicious = stats.get("malicious", 0)
     suspicious = stats.get("suspicious", 0)
+    if indicator:
+        ratio = (malicious / total) if total else 0.0
+        if malicious >= 3 or ratio >= 0.05:
+            return "malicious", f"{malicious}/{total} engines flag it malicious"
+        if malicious:
+            return "suspicious", (f"{malicious}/{total} engines flag it — at this ratio it is "
+                                  f"usually a false positive, check the categories")
+        if suspicious:
+            return "suspicious", f"{suspicious}/{total} engines flag it suspicious"
+        return "clean", f"no detections ({total} engines responded)"
     if malicious:
         return "malicious", f"{malicious}/{total} engines flag it malicious"
     if suspicious:
@@ -249,7 +264,7 @@ def http_request(method: str, path: str, api_key: str, base: str = DEFAULT_BASE,
     """
     data = None
     headers = {"x-apikey": api_key, "accept": "application/json",
-               "user-agent": "vt-check/0.1.3 (+hermes plugin)"}
+               "user-agent": "vt-check/0.1.4 (+hermes plugin)"}
     if form:
         data = urllib.parse.urlencode(form).encode("utf-8")
         headers["content-type"] = "application/x-www-form-urlencoded"
@@ -342,7 +357,7 @@ def url_lookup(api_key: str, url: str, base: str = DEFAULT_BASE) -> dict:
     if status == 200:
         attr = body.get("data", {}).get("attributes", {})
         stats = attr.get("last_analysis_stats", {})
-        verdict, why = verdict_from_stats(stats)
+        verdict, why = verdict_from_stats(stats, indicator=True)
         return {
             "status": "found", "verdict": verdict, "why": why, "stats": stats,
             "categories": dict(list((attr.get("categories") or {}).items())[:8]),
@@ -369,7 +384,7 @@ def domain_lookup(api_key: str, domain: str, base: str = DEFAULT_BASE) -> dict:
     if status == 200:
         attr = body.get("data", {}).get("attributes", {})
         stats = attr.get("last_analysis_stats", {})
-        verdict, why = verdict_from_stats(stats)
+        verdict, why = verdict_from_stats(stats, indicator=True)
         return {
             "status": "found", "verdict": verdict, "why": why, "stats": stats,
             "categories": dict(list((attr.get("categories") or {}).items())[:8]),
@@ -395,7 +410,7 @@ def ip_lookup(api_key: str, ip: str, base: str = DEFAULT_BASE) -> dict:
     if status == 200:
         attr = body.get("data", {}).get("attributes", {})
         stats = attr.get("last_analysis_stats", {})
-        verdict, why = verdict_from_stats(stats)
+        verdict, why = verdict_from_stats(stats, indicator=True)
         return {
             "status": "found", "verdict": verdict, "why": why, "stats": stats,
             "as_owner": attr.get("as_owner"), "country": attr.get("country"),

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4 — 2026-11-06
+
+- Ratio-aware verdicts for indicators: one engine flagging an IP/domain/URL is usually a false
+  positive, so `malicious` now needs ≥3 engines or ≥5% of responders; 1–2 engines reports
+  `suspicious` with an explanation (seen live: `8.8.8.8` = 1/92). Files keep "any detection is a
+  red flag".
+
 ## 0.1.3 — 2026-11-06
 
 - `vt_check_url` now routes by indicator: full URLs → `/urls`, bare domains → `/domains`,

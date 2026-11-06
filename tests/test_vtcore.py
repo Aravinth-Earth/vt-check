@@ -176,3 +176,13 @@ def test_indicator_lookup_routes_to_the_right_endpoint(plugin, monkeypatch):
     plugin.vtcore.indicator_lookup("k", "example.com")
     plugin.vtcore.indicator_lookup("k", "https://example.com/a")
     assert seen == [("ip", "8.8.8.8"), ("domain", "example.com"), ("url", "https://example.com/a")]
+
+
+def test_indicator_verdicts_tolerate_single_engine_fp(plugin):
+    vt = plugin.vtcore
+    assert vt.verdict_from_stats({"malicious": 1, "harmless": 90}, indicator=True)[0] == "suspicious"
+    assert vt.verdict_from_stats({"malicious": 5, "harmless": 85}, indicator=True)[0] == "malicious"
+    assert vt.verdict_from_stats({"malicious": 2, "undetected": 8}, indicator=True)[0] == "malicious"
+    assert vt.verdict_from_stats({"malicious": 0, "harmless": 90}, indicator=True)[0] == "clean"
+    # files keep the strict rule
+    assert vt.verdict_from_stats({"malicious": 1, "harmless": 90})[0] == "malicious"

@@ -16,6 +16,7 @@ from . import vtcore as vt
 _CTX = None
 CACHE_KEY = "lookup_cache"
 MAX_CACHE_ENTRIES = 200
+CACHE_VERSION = 2   # bump when verdict logic changes, so stale verdicts are re-derived
 
 NO_KEY_HELP = (
     "No VirusTotal API key yet. Get a free key at https://www.virustotal.com/gui/my-apikey, then "
@@ -81,7 +82,7 @@ def _cache_get(sha_or_url: str) -> dict | None:
     if not ttl:          # 0 = caching disabled
         return None
     entry = _cache().get(sha_or_url)
-    if not entry:
+    if not entry or entry.get("v") != CACHE_VERSION:
         return None
     if time.time() - entry.get("_ts", 0) > ttl:
         return None
@@ -93,7 +94,7 @@ def _cache_put(sha_or_url: str, data: dict) -> None:
         return
     try:
         cache = _cache()
-        cache[sha_or_url] = {"_ts": time.time(), "data": data}
+        cache[sha_or_url] = {"_ts": time.time(), "v": CACHE_VERSION, "data": data}
         if len(cache) > MAX_CACHE_ENTRIES:
             ordered = sorted(cache.items(), key=lambda kv: kv[1].get("_ts", 0))
             cache = dict(ordered[-MAX_CACHE_ENTRIES:])
