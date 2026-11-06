@@ -1,0 +1,37 @@
+name: vt-check
+version: 0.1.0
+manifest_version: 2
+api_version: 1
+kind: standalone
+description: >-
+  VirusTotal reputation for downloads and links. Files are hashed locally and looked up by
+  SHA-256 — never uploaded. URLs are checked read-only. Archives are inspected in memory for
+  path traversal, decompression bombs, encrypted entries and hidden executables.
+author: Aravinth S
+license: MIT
+homepage: https://github.com/Aravinth-Earth/vt-check
+tags: [security, virustotal, malware, downloads, privacy]
+requires_hermes: ">=0.22.0"
+provides_tools:
+  - vt_check_file
+  - vt_check_url
+  - vt_status
+provides_hooks: []
+provides_middleware: []
+requires_env:
+  - name: VT_API_KEY
+    description: "Free VirusTotal API key (4 requests/min, 500/day) for hash and URL reputation."
+    url: "https://www.virustotal.com/gui/my-apikey"
+    secret: true
+config_schema:
+  api_key:
+    type: secret
+    env: VT_API_KEY
+    label: "VirusTotal API key"
+    description: "Free key from virustotal.com. Only hashes and URLs are sent — files are never uploaded."
+    required: false
+  cache_ttl_hours:
+    type: int
+    default: 24
+    label: "Cache TTL (hours)"
+    description: "How long a VirusTotal result is reused before it is queried again. 0 disables the cache."
