@@ -57,7 +57,8 @@ Without a key the plugin still loads, and `vt_check_file` reports the local arch
 | Tool | What it does |
 |---|---|
 | `vt_check_file` | Hashes a file, inspects it as an archive, looks the hash up in VirusTotal, returns a merged verdict |
-| `vt_check_url` | Read-only URL reputation (detections, categories, reputation) |
+| `vt_check_url` | Read-only reputation for a link, **domain, or IP** — routes to `/urls`, `/domains`, `/ip_addresses`; defanged IOCs accepted |
+| `vt_check_ip` | Explicit IP reputation: detections, AS owner, country, network |
 | `vt_status` | Key present/valid, free-tier limits, cache TTL |
 
 Verdicts: `malicious` → `suspicious` → `caution` → `unknown` → `clean`, plus `unverified` when there is

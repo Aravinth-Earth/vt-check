@@ -25,25 +25,45 @@ CHECK_FILE = {
 CHECK_URL = {
     "name": "vt_check_url",
     "description": (
-        "Check whether a link is malicious or phishing using a READ-ONLY VirusTotal lookup — "
-        "nothing is submitted, so looking something up does not publish it. "
-        "Returns engine detections, category labels and reputation. 'unknown' means VirusTotal has "
-        "never seen that URL, which is not the same as safe. "
-        "Pass submit=true ONLY when the user explicitly wants the URL queued for scanning; that "
-        "publishes the URL to VirusTotal. "
-        "Use when the user pastes a link and asks if it is safe, legit, phishing or malware."
+        "Check a link, a domain, or an IP address with VirusTotal using a READ-ONLY lookup — nothing "
+        "is submitted, so looking something up does not publish it. Routes automatically: full URLs go "
+        "to /urls, bare domains to /domains, IPs to /ip_addresses. Defanged indicators are accepted "
+        "('hxxps://evil[.]com', '1.2.3[.]4'). Returns engine detections, category labels, reputation, "
+        "and for IPs the AS owner/country. 'unknown' means VirusTotal has never seen it, which is not "
+        "the same as safe. Set submit=true ONLY when the user explicitly wants a URL queued for "
+        "scanning; that publishes the URL. Use for 'is this link safe?', 'is this domain legit?', "
+        "'check this IP', phishing checks."
     ),
     "parameters": {
         "type": "object",
         "properties": {
-            "url": {"type": "string", "description": "Full URL (https://…) or a bare domain."},
+            "url": {
+                "type": "string",
+                "description": "Full URL (https://…), a bare domain, or an IP address.",
+            },
             "submit": {
                 "type": "boolean",
                 "default": False,
-                "description": "Submit the URL for a new VirusTotal scan if unseen. Discloses the URL publicly.",
+                "description": "Submit a URL for a new VirusTotal scan if unseen. Discloses the URL publicly.",
             },
         },
         "required": ["url"],
+    },
+}
+
+CHECK_IP = {
+    "name": "vt_check_ip",
+    "description": (
+        "Look up an IPv4/IPv6 address in VirusTotal (read-only): engine detections, AS owner, country "
+        "and network. Use when the user gives an explicit IP and asks whether it is malicious, a "
+        "scanner, a botnet host, or just wants IP reputation. For links and domains use vt_check_url."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "ip": {"type": "string", "description": "IPv4 or IPv6 address, e.g. 8.8.8.8"},
+        },
+        "required": ["ip"],
     },
 }
 

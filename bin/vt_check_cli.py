@@ -175,16 +175,21 @@ def main(argv: list[str] | None = None) -> int:
             results.append({"url": url, "verdict": "unverified", "why": "no API key"})
             continue
         normalised = url if "://" in url else f"https://{url}"
-        cached = _cached(cache, normalised) if cache is not None else None
+        kind, target = vt.normalise_target(url)
+        cache_key = target
+        cached = _cached(cache, cache_key) if cache is not None else None
         if cached:
-            results.append({"url": url, "verdict": cached.get("verdict", cached.get("status")),
-                            "virustotal": {**cached, "status": cached.get("status", "found")}})
+            results.append({"url": url, "queried_as": kind, "target": target,
+                            "verdict": cached.get("verdict", cached.get("status")),
+                            "virustotal": cached})
             continue
         try:
-            rec = vt.url_lookup(key, normalised)
+            rec = vt.indicator_lookup(key, url)
             if cache is not None and rec.get("status") in ("found", "unknown"):
-                _store(cache, normalised, rec)
-            results.append({"url": url, "verdict": rec.get("verdict", rec.get("status")),
+                _store(cache, cache_key, rec)
+            results.append({"url": url, "queried_as": rec.get("queried_as", kind),
+                            "target": rec.get("target", target),
+                            "verdict": rec.get("verdict", rec.get("status")),
                             "virustotal": rec})
         except vt.VTError as exc:
             results.append({"url": url, "verdict": "error", "why": str(exc)})

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.3 — 2026-11-06
+
+- `vt_check_url` now routes by indicator: full URLs → `/urls`, bare domains → `/domains`,
+  IP addresses → `/ip_addresses`; defanged forms (`hxxps://evil[.]example`, `1.2.3[.]4`) are
+  normalised first.
+- New tool `vt_check_ip` for explicit IP reputation (detections, AS owner, country, network).
+- CLI `--url` accepts a URL, a domain, or an IP and reports which endpoint answered.
+- Tests: routing, defanging, IPv4/IPv6 classification, non-IP rejection.
+
 ## 0.1.2 — 2026-11-06
 
 - Added a command-line entry point (`bin/vt-check` → `vtcheck.cli`): one command for files, folders,

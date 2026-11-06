@@ -80,14 +80,15 @@ def test_cache_avoids_second_request(cli, tmp_path, monkeypatch):
 def test_url_check_uses_readonly_lookup(cli, monkeypatch, capsys):
     seen = {}
 
-    def fake(key, url, **kw):
-        seen["url"] = url
-        return {"status": "found", "verdict": "suspicious", "why": "2/90 engines"}
+    def fake(key, target, **kw):
+        seen["target"] = target
+        return {"status": "found", "verdict": "suspicious", "why": "2/90 engines",
+                "queried_as": "domain", "target": "example.com"}
 
     monkeypatch.setattr(cli, "resolve_key", lambda: "k")
-    monkeypatch.setattr(cli.vt, "url_lookup", fake)
+    monkeypatch.setattr(cli.vt, "indicator_lookup", fake)
     code = cli.main(["--url", "example.com", "--quiet"])
-    assert seen["url"] == "https://example.com"
+    assert seen["target"] == "example.com"
     assert "SUSPICIOUS" in capsys.readouterr().out
     assert code == 1
 

@@ -171,13 +171,11 @@ def test_url_submit_is_opt_in(plugin, ctx, with_key, fake_http):
     assert "public" in out["privacy"]
 
 
-def test_bare_domain_is_upgraded_to_https(plugin, ctx, with_key, fake_http):
+def test_bare_domain_routes_to_domain_endpoint(plugin, ctx, with_key, fake_http):
     seen = {}
     fake_http(lambda method, path, form: (seen.setdefault("path", path), _unknown(method, path, form))[1])
     ctx.tools["vt_check_url"]["handler"]({"url": "example.com"})
-    import base64
-    expected = base64.urlsafe_b64encode(b"https://example.com").decode().rstrip("=")
-    assert seen["path"] == f"urls/{expected}"
+    assert seen["path"] == "domains/example.com"
 
 
 def test_input_validation(plugin, ctx, tmp_path, with_key):
@@ -222,3 +220,49 @@ def test_cache_ttl_zero_disables_cache(plugin, ctx, with_key, fake_http, monkeyp
         second = json.loads(ctx.tools["vt_check_file"]["handler"]({"path": str(p)}))
     assert second["virustotal"]["source"] == "api"
     assert len(calls) == 2
+
+
+def test_url_tool_routes_domain_to_domain_endpoint(plugin, ctx, with_key, monkeypatch):
+    seen = {}
+    def fake_domain(key, domain, **kw):
+        seen["domain"] = domain
+        return {"status": "found", "verdict": "suspicious", "why": "3/90 engines",
+                "categories": {"x": "phishing"}}
+    monkeypatch.setattr(plugin.vtcore, "domain_lookup", fake_domain)
+    out = json.loads(ctx.tools["vt_check_url"]["handler"]({"url": "evil.example"}))
+    assert seen["domain"] == "evil.example"
+    assert out["queried_as"] == "domain"
+    assert out["verdict"] == "suspicious"
+
+
+def test_url_tool_accepts_defanged_indicator(plugin, ctx, with_key, monkeypatch):
+    seen = {}
+    def fake_url(key, url, **kw):
+        seen["url"] = url
+        return {"status": "found", "verdict": "malicious", "why": "9/90"}
+    monkeypatch.setattr(plugin.vtcore, "url_lookup", fake_url)
+    json.loads(ctx.tools["vt_check_url"]["handler"]({"url": "hxxps://evil[.]example/x"}))
+    assert seen["url"] == "https://evil.example/x"
+
+
+def test_ip_tool_happy_path(plugin, ctx, with_key, monkeypatch):
+    monkeypatch.setattr(plugin.vtcore, "ip_lookup", lambda key, ip, **kw: {
+        "status": "found", "verdict": "clean", "why": "0/90 engines", "as_owner": "GOOGLE"})
+    out = json.loads(ctx.tools["vt_check_ip"]["handler"]({"ip": "8.8.8.8"}))
+    assert out["ok"] is True
+    assert out["ip"] == "8.8.8.8"
+    assert out["verdict"] == "clean"
+    assert out["readonly_check"] is True
+
+
+def test_ip_tool_rejects_non_ip(plugin, ctx, with_key):
+    out = json.loads(ctx.tools["vt_check_ip"]["handler"]({"ip": "example.com"}))
+    assert out["ok"] is False and out["error"] == "not_an_ip"
+    assert json.loads(ctx.tools["vt_check_ip"]["handler"]({}))["error"] == "missing_argument"
+
+
+def test_ip_tool_without_key(plugin, ctx, monkeypatch):
+    monkeypatch.setattr(plugin.tools, "_secret", lambda n: None)
+    out = json.loads(ctx.tools["vt_check_ip"]["handler"]({"ip": "1.2.3.4"}))
+    assert out["error"] == "no_api_key"
+    assert "my-apikey" in out["help"]

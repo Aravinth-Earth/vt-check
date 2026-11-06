@@ -206,37 +206,58 @@ def _summary(r: dict) -> str:
 
 @_safe
 def check_url(args: dict, **kwargs) -> str:
-    url = str(args.get("url") or "").strip().strip("'\"")
-    if not url:
-        return _dump({"ok": False, "error": "missing_argument", "help": "Pass the URL to check."})
-    if not url.startswith(("http://", "https://", "ftp://")):
-        url = "https://" + url
-
+    raw = str(args.get("url") or args.get("target") or "").strip()
+    if not raw:
+        return _dump({"ok": False, "error": "missing_argument",
+                      "help": "Pass a URL, a domain, or an IP address to check."})
     submit = bool(args.get("submit", False))
     key = _api_key()
     if not key:
-        return _dump({"ok": False, "error": "no_api_key", "url": url, "help": NO_KEY_HELP})
+        return _dump({"ok": False, "error": "no_api_key", "url": raw, "help": NO_KEY_HELP})
 
     try:
-        report = vt.url_lookup(key, url)
-        if report.get("status") == "unknown" and submit:
-            report = vt.url_submit(key, url)
+        kind, value = vt.normalise_target(raw)
+        report = vt.indicator_lookup(key, raw)
+        if submit and report.get("queried_as") == "url" and report.get("status") == "unknown":
+            report = {**report, **vt.url_submit(key, value)}
     except vt.VTError as exc:
-        return _dump({"ok": False, "error": "vt_error", "url": url, "help": str(exc)})
+        return _dump({"ok": False, "error": "vt_error", "url": raw, "help": str(exc)})
 
     payload = {
         "ok": True,
-        "url": url,
+        "url": raw,
         "submitted": submit,
         "readonly_check": not submit,
         "privacy": ("URL submitted to VirusTotal — it is public there now" if submit
-                    else "read-only lookup; the URL was not submitted"),
+                    else "read-only lookup; nothing was submitted"),
         **report,
     }
     payload["summary"] = (
-        f"{url}: {str(payload.get('verdict', payload.get('status'))).upper()} — "
-        f"{payload.get('why', '')}"
+        f"{payload.get('target', raw)} ({payload.get('queried_as')}): "
+        f"{str(payload.get('verdict', payload.get('status'))).upper()} — {payload.get('why', '')}"
     )
+    return _dump(payload)
+
+
+@_safe
+def check_ip(args: dict, **kwargs) -> str:
+    raw = str(args.get("ip") or "").strip()
+    if not raw:
+        return _dump({"ok": False, "error": "missing_argument", "help": "Pass an IPv4 or IPv6 address."})
+    kind, value = vt.normalise_target(raw)
+    if kind != "ip":
+        return _dump({"ok": False, "error": "not_an_ip",
+                      "help": f"'{raw}' is not an IP address. Use vt_check_url for links and domains."})
+    key = _api_key()
+    if not key:
+        return _dump({"ok": False, "error": "no_api_key", "ip": value, "help": NO_KEY_HELP})
+    try:
+        report = vt.ip_lookup(key, value)
+    except vt.VTError as exc:
+        return _dump({"ok": False, "error": "vt_error", "ip": value, "help": str(exc)})
+    payload = {"ok": True, "ip": value, "readonly_check": True,
+               "privacy": "read-only lookup; nothing was submitted", **report}
+    payload["summary"] = f"{value}: {str(payload.get('verdict', payload.get('status'))).upper()} — {payload.get('why', '')}"
     return _dump(payload)
 
 

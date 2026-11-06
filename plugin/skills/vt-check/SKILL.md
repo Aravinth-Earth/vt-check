@@ -23,7 +23,8 @@ metadata:
 | Tool | Use it for |
 |---|---|
 | `vt_check_file` | Local hashes + archive forensics + SHA-256 lookup in VirusTotal. Never uploads. |
-| `vt_check_url` | Read-only URL reputation. `submit=true` only on explicit request. |
+| `vt_check_url` | Read-only reputation for a link, domain, or IP; defanged IOCs OK. `submit=true` only on explicit request. |
+| `vt_check_ip` | Explicit IP reputation: detections, AS owner, country, network. |
 | `vt_status` | Is the key configured and valid? Free-tier limits and cache TTL. |
 
 ## Say the privacy line when it matters

@@ -21,6 +21,8 @@ def register(ctx):
                       schema=schemas.CHECK_FILE, handler=tools.check_file)
     ctx.register_tool(name="vt_check_url", toolset="virustotal",
                       schema=schemas.CHECK_URL, handler=tools.check_url)
+    ctx.register_tool(name="vt_check_ip", toolset="virustotal",
+                      schema=schemas.CHECK_IP, handler=tools.check_ip)
     ctx.register_tool(name="vt_status", toolset="virustotal",
                       schema=schemas.STATUS, handler=tools.status)
 

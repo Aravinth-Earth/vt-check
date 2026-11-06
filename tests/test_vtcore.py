@@ -136,3 +136,43 @@ def test_url_id_is_vt_base64_without_padding(plugin):
 def test_human_bytes(plugin):
     assert plugin.vtcore.human_bytes(999) == "999B"
     assert plugin.vtcore.human_bytes(1536) == "1.5KB"
+
+
+@pytest.mark.parametrize("raw,kind,value", [
+    ("https://evil.example/x?y=1", "url", "https://evil.example/x?y=1"),
+    ("evil.example", "domain", "evil.example"),
+    ("EVIL.example.", "domain", "evil.example"),
+    ("1.2.3.4", "ip", "1.2.3.4"),
+    ("2001:db8::1", "ip", "2001:db8::1"),
+    ("hxxps://evil[.]example/payload", "url", "https://evil.example/payload"),
+    ("1.2.3[.]4", "ip", "1.2.3.4"),
+    ("example.com/login", "url", "https://example.com/login"),
+])
+def test_normalise_target(raw, kind, value, plugin):
+    got_kind, got_value = plugin.vtcore.normalise_target(raw)
+    assert (got_kind, got_value) == (kind, value)
+
+
+def test_indicator_lookup_routes_to_the_right_endpoint(plugin, monkeypatch):
+    seen = []
+
+    def fake_ip(key, ip, **kw):
+        seen.append(("ip", ip))
+        return {"status": "found", "verdict": "clean", "why": "ok"}
+
+    def fake_domain(key, domain, **kw):
+        seen.append(("domain", domain))
+        return {"status": "found", "verdict": "clean", "why": "ok"}
+
+    def fake_url(key, url, **kw):
+        seen.append(("url", url))
+        return {"status": "found", "verdict": "clean", "why": "ok"}
+
+    monkeypatch.setattr(plugin.vtcore, "ip_lookup", fake_ip)
+    monkeypatch.setattr(plugin.vtcore, "domain_lookup", fake_domain)
+    monkeypatch.setattr(plugin.vtcore, "url_lookup", fake_url)
+
+    plugin.vtcore.indicator_lookup("k", "8.8.8.8")
+    plugin.vtcore.indicator_lookup("k", "example.com")
+    plugin.vtcore.indicator_lookup("k", "https://example.com/a")
+    assert seen == [("ip", "8.8.8.8"), ("domain", "example.com"), ("url", "https://example.com/a")]

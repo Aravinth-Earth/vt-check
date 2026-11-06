@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import ipaddress
 import json
 import re
 import stat
@@ -248,7 +249,7 @@ def http_request(method: str, path: str, api_key: str, base: str = DEFAULT_BASE,
     """
     data = None
     headers = {"x-apikey": api_key, "accept": "application/json",
-               "user-agent": "vt-check/0.1.2 (+hermes plugin)"}
+               "user-agent": "vt-check/0.1.3 (+hermes plugin)"}
     if form:
         data = urllib.parse.urlencode(form).encode("utf-8")
         headers["content-type"] = "application/x-www-form-urlencoded"
@@ -269,6 +270,40 @@ def http_request(method: str, path: str, api_key: str, base: str = DEFAULT_BASE,
 
 class VTError(Exception):
     """Raised for responses the tool layer turns into a user-facing error."""
+
+
+def _target_kind(raw: str) -> str:
+    """Classify a user-supplied indicator: 'url' | 'domain' | 'ip'."""
+    s = raw.strip()
+    if s.startswith(("http://", "https://", "ftp://")):
+        return "url"
+    try:
+        ipaddress.ip_address(s)
+        return "ip"
+    except ValueError:
+        pass
+    if "/" in s or "?" in s or "@" in s:
+        return "url"
+    if re.fullmatch(r"(?=.{1,253}$)([A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}\.?", s):
+        return "domain"
+    return "url"
+
+
+def normalise_target(raw: str) -> tuple[str, str]:
+    """Undo common IOC defanging, then return (kind, value).
+
+    'hxxps://evil[.]com/x' -> ('url', 'https://evil.com/x'); '1.2.3.4' -> ('ip', '1.2.3.4').
+    """
+    s = (raw or "").strip().strip("'\"<>")
+    s = s.replace("[.]", ".").replace("(.)", ".").replace("[:]", ":")
+    s = re.sub(r"^hxxps?://", lambda m: m.group(0).replace("hxxp", "http"), s, flags=re.I)
+    s = re.sub(r"^hxxp", "http", s, flags=re.I)
+    kind = _target_kind(s)
+    if kind == "url" and not s.startswith(("http://", "https://", "ftp://")):
+        s = "https://" + s
+    if kind == "domain":
+        s = s.rstrip(".").lower()
+    return kind, s
 
 
 def file_lookup(api_key: str, sha256: str, base: str = DEFAULT_BASE) -> dict:
@@ -327,6 +362,65 @@ def url_lookup(api_key: str, url: str, base: str = DEFAULT_BASE) -> dict:
         raise VTError("VirusTotal rate limit hit (free tier: 4 requests/min, 500/day). Wait and retry.")
     raise VTError(f"VirusTotal returned HTTP {status}: "
                   f"{body.get('error', {}).get('message', 'unknown error')[:200]}")
+
+
+def domain_lookup(api_key: str, domain: str, base: str = DEFAULT_BASE) -> dict:
+    status, body = http_request("GET", f"domains/{domain}", api_key, base=base)
+    if status == 200:
+        attr = body.get("data", {}).get("attributes", {})
+        stats = attr.get("last_analysis_stats", {})
+        verdict, why = verdict_from_stats(stats)
+        return {
+            "status": "found", "verdict": verdict, "why": why, "stats": stats,
+            "categories": dict(list((attr.get("categories") or {}).items())[:8]),
+            "reputation": attr.get("reputation"),
+            "registrar": attr.get("registrar"),
+            "creation_epoch": attr.get("creation_date"),
+            "report_url": f"https://www.virustotal.com/gui/domain/{domain}",
+        }
+    if status == 404:
+        return {"status": "unknown", "verdict": "unknown",
+                "why": "this domain is not in VirusTotal (unknown is NOT safe)"}
+    if status in (401, 403):
+        raise VTError(f"VirusTotal rejected the API key (HTTP {status}). "
+                      f"Update it at https://www.virustotal.com/gui/my-apikey")
+    if status == 429:
+        raise VTError("VirusTotal rate limit hit (free tier: 4 requests/min, 500/day). Wait and retry.")
+    raise VTError(f"VirusTotal returned HTTP {status}: "
+                  f"{body.get('error', {}).get('message', 'unknown error')[:200]}")
+
+
+def ip_lookup(api_key: str, ip: str, base: str = DEFAULT_BASE) -> dict:
+    status, body = http_request("GET", f"ip_addresses/{ip}", api_key, base=base)
+    if status == 200:
+        attr = body.get("data", {}).get("attributes", {})
+        stats = attr.get("last_analysis_stats", {})
+        verdict, why = verdict_from_stats(stats)
+        return {
+            "status": "found", "verdict": verdict, "why": why, "stats": stats,
+            "as_owner": attr.get("as_owner"), "country": attr.get("country"),
+            "network": attr.get("network"), "reputation": attr.get("reputation"),
+            "report_url": f"https://www.virustotal.com/gui/ip-address/{ip}",
+        }
+    if status == 404:
+        return {"status": "unknown", "verdict": "unknown",
+                "why": "this IP is not in VirusTotal (unknown is NOT safe)"}
+    if status in (401, 403):
+        raise VTError(f"VirusTotal rejected the API key (HTTP {status}).")
+    if status == 429:
+        raise VTError("VirusTotal rate limit hit (free tier: 4 requests/min, 500/day). Wait and retry.")
+    raise VTError(f"VirusTotal returned HTTP {status}: "
+                  f"{body.get('error', {}).get('message', 'unknown error')[:200]}")
+
+
+def indicator_lookup(api_key: str, raw: str, base: str = DEFAULT_BASE) -> dict:
+    """Route a pasted indicator to the right VirusTotal endpoint."""
+    kind, value = normalise_target(raw)
+    if kind == "ip":
+        return {"queried_as": "ip", "target": value, **ip_lookup(api_key, value, base=base)}
+    if kind == "domain":
+        return {"queried_as": "domain", "target": value, **domain_lookup(api_key, value, base=base)}
+    return {"queried_as": "url", "target": value, **url_lookup(api_key, value, base=base)}
 
 
 def url_submit(api_key: str, url: str, base: str = DEFAULT_BASE) -> dict:
