@@ -1,5 +1,5 @@
 name: vt-check
-version: 0.1.0
+version: 0.1.1
 manifest_version: 2
 api_version: 1
 kind: standalone
@@ -17,7 +17,6 @@ provides_tools:
   - vt_check_url
   - vt_status
 provides_hooks: []
-provides_middleware: []
 requires_env:
   - name: VT_API_KEY
     description: "Free VirusTotal API key (4 requests/min, 500/day) for hash and URL reputation."

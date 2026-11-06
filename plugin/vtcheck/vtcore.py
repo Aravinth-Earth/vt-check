@@ -248,7 +248,7 @@ def http_request(method: str, path: str, api_key: str, base: str = DEFAULT_BASE,
     """
     data = None
     headers = {"x-apikey": api_key, "accept": "application/json",
-               "user-agent": "vt-check/0.1.0 (+hermes plugin)"}
+               "user-agent": "vt-check/0.1.1 (+hermes plugin)"}
     if form:
         data = urllib.parse.urlencode(form).encode("utf-8")
         headers["content-type"] = "application/x-www-form-urlencoded"

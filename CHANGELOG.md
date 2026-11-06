@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 — 2026-11-06
+
+- Drop the `provides_middleware` key from `plugin.yaml`: this Hermes build does not know it and logged a
+  user-visible "unknown manifest field ignored" warning at load. Added a test that pins the manifest key
+  set to the runtime's known fields.
+
 ## 0.1.0 — 2026-11-05
 
 First proper build, restructured from the throwaway prototype to the catalog's developer-guide

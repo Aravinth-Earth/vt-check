@@ -43,6 +43,19 @@ def test_every_tool_has_schema_name_parameter_spec(ctx):
         assert "parameters" in schema and schema["parameters"].get("type") == "object"
 
 
+def test_no_unknown_manifest_fields(manifest):
+    """The runtime loader ignores unknown fields with a user-visible warning — keep the set exact."""
+    known = {
+        "name", "version", "description", "author", "requires_env", "provides_tools", "provides_hooks",
+        "kind", "label", "optional_env", "platforms", "manifest_version", "api_version",
+        "requires_plugins", "python_dependencies", "config_schema", "license", "homepage", "tags",
+        "capabilities", "requires_hermes", "python_runtime", "provides_locales", "requires_auth",
+        "oauth", "config_keys",
+    }
+    unknown = sorted(set(manifest) - known)
+    assert not unknown, f"unknown manifest field(s): {unknown}"
+
+
 def test_requires_env_matches_config_schema_env(manifest):
     env_names = {e["name"] if isinstance(e, dict) else e for e in manifest["requires_env"]}
     assert "VT_API_KEY" in env_names
