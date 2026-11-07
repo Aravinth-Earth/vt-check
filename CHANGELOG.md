@@ -1,3 +1,16 @@
+## 0.1.5 — 2026-11-07
+
+- Findings are now three levels: `alert` (structural, states the consequence), `warn`, and
+  `info`. Executable/code files inside an archive are `info` — a source tarball or installer
+  full of scripts is normal, not suspicious.
+- Unseen hash no longer reads like an accusation: the text says no engine has seen that build,
+  that this is normal for a new build, and that it is neither evidence of malware nor proof of
+  safety. A clean local archive with an unseen hash stays `UNKNOWN`.
+- Every alert now carries the concrete consequence ("extracting it writes outside the folder",
+  "expands to X on extraction", "really an .exe dressed as a document").
+- New check: an archive entry named like a document whose magic bytes are a PE/ELF executable.
+- Cache version 3 so previously cached verdicts are re-derived.
+
 # Changelog
 
 ## 0.1.4 — 2026-11-06

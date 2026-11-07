@@ -24,12 +24,16 @@ DEFAULT_BASE = "https://www.virustotal.com/api/v3"
 MAX_ARCHIVE_DEPTH = 3
 NESTED_READ_LIMIT = 32 * 1024 * 1024
 
-EXEC_EXTS = frozenset({
+# Executable content is reported as INFO, never as a warning: source tarballs, npm packages
+# and installers are full of scripts, and "this zip contains a .py" is not a security signal.
+CODE_EXTS = frozenset({".py", ".sh", ".pl", ".rb", ".php", ".js", ".jar", ".war"})
+BINARY_EXTS = frozenset({
     ".exe", ".dll", ".scr", ".com", ".pif", ".msi", ".msp", ".bat", ".cmd",
-    ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".hta", ".lnk",
-    ".jar", ".apk", ".dex", ".deb", ".rpm", ".appimage", ".run", ".sh", ".elf",
-    ".so", ".dylib", ".py", ".pl", ".rb", ".php", ".iso", ".img", ".bin", ".ocx",
+    ".ps1", ".psm1", ".vbs", ".vbe", ".jse", ".wsf", ".hta", ".lnk",
+    ".apk", ".dex", ".deb", ".rpm", ".appimage", ".run", ".elf",
+    ".so", ".dylib", ".iso", ".img", ".bin", ".ocx",
 })
+EXEC_EXTS = CODE_EXTS | BINARY_EXTS
 DOC_EXTS = frozenset({
     ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".doc", ".docx",
     ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".rtf", ".mp3", ".mp4",
@@ -113,30 +117,56 @@ def _zip_findings(raw: bytes, label: str, depth: int, out: list) -> None:
 
     total = sum(i.file_size for i in zf.infolist())
     if len(raw) and total / max(len(raw), 1) > 100 and total > 10 * 1024 * 1024:
+        ratio = total / max(len(raw), 1)
         out.append({"level": "alert",
-                    "why": f"{label}: decompression bomb — {human_bytes(total)} from {human_bytes(len(raw))}"})
+                    "why": f"{label}: decompression bomb — {human_bytes(total)} from "
+                           f"{human_bytes(len(raw))} ({ratio:.0f}:1); extracting it can fill the disk"})
 
     for info in zf.infolist():
         name = info.filename
         parts = [p for p in re.split(r"[\\/]", name) if p]
         if name.startswith("/") or re.match(r"^[A-Za-z]:", name) or ".." in parts:
-            out.append({"level": "alert", "why": f"{label}: path traversal entry '{name}'"})
+            out.append({"level": "alert",
+                        "why": f"{label}: path traversal entry '{name}' — extracting it writes "
+                               f"outside the folder you extract into"})
         if stat.S_ISLNK((info.external_attr >> 16) & 0o170000):
-            out.append({"level": "warn", "why": f"{label}: symlink entry '{name}'"})
+            out.append({"level": "warn",
+                        "why": f"{label}: symlink entry '{name}' — can point outside the extraction folder"})
         if info.flag_bits & 0x1:
-            out.append({"level": "warn", "why": f"{label}: encrypted entry '{name}' — contents unreadable"})
+            out.append({"level": "warn",
+                        "why": f"{label}: encrypted entry '{name}' — scanners cannot read its contents"})
 
         base = parts[-1] if parts else name
         if name.endswith("/") or not base:
             continue
         ext = Path(base).suffix.lower()
         if DOUBLE_EXT_RE.search(base):
-            out.append({"level": "alert", "why": f"{label}: double extension '{name}'"})
-        elif ext in EXEC_EXTS:
-            out.append({"level": "warn",
-                        "why": f"{label}: executable/script inside archive '{name}' ({human_bytes(info.file_size)})"})
+            out.append({"level": "alert",
+                        "why": f"{label}: double extension '{name}' — really a "
+                               f"'{Path(base).suffix.lower().lstrip('.')}' file dressed as a document"})
+        elif ext in CODE_EXTS:
+            out.append({"level": "info",
+                        "why": f"{label}: contains code file '{name}' ({human_bytes(info.file_size)}) "
+                               f"— normal in source and installer archives"})
+        elif ext in BINARY_EXTS:
+            out.append({"level": "info",
+                        "why": f"{label}: contains binary '{name}' ({human_bytes(info.file_size)}) "
+                               f"— normal in installers"})
         if info.file_size > 10 * 1024 * 1024 and info.file_size / max(info.compress_size, 1) > 200:
-            out.append({"level": "alert", "why": f"{label}: extreme compression on '{name}'"})
+            ratio = info.file_size / max(info.compress_size, 1)
+            out.append({"level": "alert",
+                        "why": f"{label}: extreme compression on '{name}' ({ratio:.0f}:1) — expands to "
+                               f"{human_bytes(info.file_size)} on extraction"})
+        if ext in DOC_EXTS and info.file_size <= NESTED_READ_LIMIT:
+            try:
+                with zf.open(info) as fh:
+                    head_bytes = fh.read(8)
+                if head_bytes.startswith((b"MZ", b"\x7fELF")):
+                    out.append({"level": "alert",
+                                "why": f"{label}: '{name}' is named like a document but its content is "
+                                       f"an executable ({'PE' if head_bytes[:2] == b'MZ' else 'ELF'})"})
+            except Exception:
+                pass
 
         if depth < MAX_ARCHIVE_DEPTH and info.file_size <= NESTED_READ_LIMIT and ext in ZIP_EXTS:
             try:
@@ -156,21 +186,33 @@ def _tar_findings(raw: bytes, label: str, depth: int, out: list) -> None:
         for member in tf:
             parts = [p for p in member.name.split("/") if p]
             if member.name.startswith("/") or ".." in parts:
-                out.append({"level": "alert", "why": f"{label}: path traversal entry '{member.name}'"})
+                out.append({"level": "alert",
+                            "why": f"{label}: path traversal entry '{member.name}' — extracting it writes "
+                                   f"outside the folder you extract into"})
             if member.issym() or member.islnk():
                 out.append({"level": "warn",
-                            "why": f"{label}: link entry '{member.name}' -> '{member.linkname}'"})
+                            "why": f"{label}: link entry '{member.name}' -> '{member.linkname}' — can point "
+                                   f"outside the extraction folder"})
             if member.isfile():
                 total += member.size
                 ext = Path(member.name).suffix.lower()
                 if DOUBLE_EXT_RE.search(member.name):
-                    out.append({"level": "alert", "why": f"{label}: double extension '{member.name}'"})
-                elif ext in EXEC_EXTS:
-                    out.append({"level": "warn",
-                                "why": f"{label}: executable/script inside archive '{member.name}'"})
+                    out.append({"level": "alert",
+                                "why": f"{label}: double extension '{member.name}' — really a "
+                                       f"'{ext.lstrip('.')}' file dressed as a document"})
+                elif ext in CODE_EXTS:
+                    out.append({"level": "info",
+                                "why": f"{label}: contains code file '{member.name}' "
+                                       f"({human_bytes(member.size)}) — normal in source archives"})
+                elif ext in BINARY_EXTS:
+                    out.append({"level": "info",
+                                "why": f"{label}: contains binary '{member.name}' "
+                                       f"({human_bytes(member.size)}) — normal in installers"})
     if len(raw) and total / max(len(raw), 1) > 100 and total > 10 * 1024 * 1024:
+        ratio = total / max(len(raw), 1)
         out.append({"level": "alert",
-                    "why": f"{label}: decompression bomb — {human_bytes(total)} from {human_bytes(len(raw))}"})
+                    "why": f"{label}: decompression bomb — {human_bytes(total)} from "
+                           f"{human_bytes(len(raw))} ({ratio:.0f}:1); extracting it can fill the disk"})
 
 
 def archive_findings(path: Path, head: bytes) -> list:
@@ -339,8 +381,9 @@ def file_lookup(api_key: str, sha256: str, base: str = DEFAULT_BASE) -> dict:
         }
     if status == 404:
         return {"status": "unknown", "verdict": "unknown",
-                "why": "hash not in VirusTotal — nobody has scanned this build yet "
-                       "(unknown is NOT the same as safe)"}
+                "why": "hash not in VirusTotal — no engine has seen this exact build, so there is "
+                       "no reputation to report. Unseen is normal for a new build and is not evidence "
+                       "of malware; it is also not proof of safety."}
     if status in (401, 403):
         raise VTError(f"VirusTotal rejected the API key (HTTP {status}). "
                       f"Update it at https://www.virustotal.com/gui/my-apikey")
@@ -368,7 +411,8 @@ def url_lookup(api_key: str, url: str, base: str = DEFAULT_BASE) -> dict:
         }
     if status == 404:
         return {"status": "unknown", "verdict": "unknown",
-                "why": "this URL has never been scanned by VirusTotal (unknown is NOT safe)",
+                "why": "no VirusTotal report exists for this URL — no reputation data either way; "
+                       "that alone is not evidence of malice",
                 "report_url": None}
     if status in (401, 403):
         raise VTError(f"VirusTotal rejected the API key (HTTP {status}). "
@@ -395,7 +439,7 @@ def domain_lookup(api_key: str, domain: str, base: str = DEFAULT_BASE) -> dict:
         }
     if status == 404:
         return {"status": "unknown", "verdict": "unknown",
-                "why": "this domain is not in VirusTotal (unknown is NOT safe)"}
+                "why": "VirusTotal has no report for this domain — no reputation data either way"}
     if status in (401, 403):
         raise VTError(f"VirusTotal rejected the API key (HTTP {status}). "
                       f"Update it at https://www.virustotal.com/gui/my-apikey")
@@ -419,7 +463,7 @@ def ip_lookup(api_key: str, ip: str, base: str = DEFAULT_BASE) -> dict:
         }
     if status == 404:
         return {"status": "unknown", "verdict": "unknown",
-                "why": "this IP is not in VirusTotal (unknown is NOT safe)"}
+                "why": "VirusTotal has no report for this IP — no reputation data either way"}
     if status in (401, 403):
         raise VTError(f"VirusTotal rejected the API key (HTTP {status}).")
     if status == 429:

@@ -52,7 +52,6 @@ def test_zip_traversal_double_extension_and_executable(tmp_path, plugin):
     why = " ".join(f["why"] for f in findings)
     assert "path traversal" in why
     assert "double extension" in why
-    assert "executable/script inside archive" in why
     assert findings and findings[0]["level"] == "alert"
 
 
@@ -186,3 +185,35 @@ def test_indicator_verdicts_tolerate_single_engine_fp(plugin):
     assert vt.verdict_from_stats({"malicious": 0, "harmless": 90}, indicator=True)[0] == "clean"
     # files keep the strict rule
     assert vt.verdict_from_stats({"malicious": 1, "harmless": 90})[0] == "malicious"
+
+
+def test_plain_source_zip_is_not_flagged(tmp_path, plugin):
+    """A legit archive with code files must not gain a security warning."""
+    vt = plugin.vtcore
+    p = tmp_path / "release.zip"
+    with zipfile.ZipFile(p, "w") as zf:
+        zf.writestr("app/main.py", "print('hi')\n")
+        zf.writestr("README.md", "# notes\n")
+        zf.writestr("bin/tool.sh", "#!/bin/sh\necho ok\n")
+    findings = vt.archive_findings(p, vt.read_head(p))
+    assert all(f["level"] == "info" for f in findings), findings
+    assert vt.merge_verdict(findings, "clean") == "clean"
+    assert vt.merge_verdict(findings, "unknown") == "unknown"
+
+
+def test_unseen_hash_stays_unknown_not_suspicious(tmp_path, plugin):
+    vt = plugin.vtcore
+    p = tmp_path / "fresh-build.zip"
+    with zipfile.ZipFile(p, "w") as zf:
+        zf.writestr("app.py", "x = 1\n")
+    findings = vt.archive_findings(p, vt.read_head(p))
+    assert vt.merge_verdict(findings, None) in ("clean", "unknown")
+
+
+def test_magic_mismatch_inside_zip_is_alert(tmp_path, plugin):
+    vt = plugin.vtcore
+    p = tmp_path / "docs.zip"
+    with zipfile.ZipFile(p, "w") as zf:
+        zf.writestr("photo.pdf", b"MZ\x90\x00fake-pe")
+    findings = vt.archive_findings(p, vt.read_head(p))
+    assert any(f["level"] == "alert" and "named like a document" in f["why"] for f in findings), findings

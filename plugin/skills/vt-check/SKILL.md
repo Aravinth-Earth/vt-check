@@ -40,13 +40,18 @@ key*, or `VT_API_KEY` in `~/.hermes/.env`, then restart Hermes.
 
 ## Reading the verdict
 
-- `malicious` — at least one engine flags it. Stop; do not open.
-- `suspicious` — detections or local red flags (traversal, bomb, double extension). Sandbox/VM only.
-- `caution` — an executable inside the archive, encrypted entries, or an uninspectable 7z/rar.
-  Normal for known software, suspicious for an unexpected download.
-- `unknown` — the hash is not in VirusTotal. **Not "safe"**: fresh or mutated malware has no record.
-  Fall back to provenance (official domain, package signature) and the local findings.
+- `malicious` — engines flag it. Stop; do not open.
+- `suspicious` — engines flag it, or an `alert` finding with a concrete consequence
+  (path traversal, decompression bomb, double extension, document-named executable).
+- `caution` — a `warn` finding: encrypted entry, symlink, uninspectable 7z/rar.
+- `unknown` — no VirusTotal record for this exact build. That is normal for a new build and
+  is **not** evidence of malware, nor proof of safety. Report it as unseen, point at provenance
+  (official domain, publisher signature), and quote the local findings as facts.
 - `unverified` — no API key, so only local findings apply.
+
+Report findings as facts with their consequence. Never call an archive "malware" or tell the
+user to delete it from local checks alone, and never treat a code/executable file inside an
+archive as suspicious on its own — source packages and installers are full of them.
 
 ## Quota
 

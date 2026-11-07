@@ -16,7 +16,7 @@ from . import vtcore as vt
 _CTX = None
 CACHE_KEY = "lookup_cache"
 MAX_CACHE_ENTRIES = 200
-CACHE_VERSION = 2   # bump when verdict logic changes, so stale verdicts are re-derived
+CACHE_VERSION = 3   # bump when verdict logic changes, so stale verdicts are re-derived
 
 NO_KEY_HELP = (
     "No VirusTotal API key yet. Get a free key at https://www.virustotal.com/gui/my-apikey, then "

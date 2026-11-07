@@ -1,6 +1,6 @@
 [project]
 name = "hermes-plugin-vt-check"
-version = "0.1.4"
+version = "0.1.5"
 description = "VirusTotal reputation for downloads and links — hash-only lookups, never uploads."
 readme = "README.md"
 requires-python = ">=3.10"

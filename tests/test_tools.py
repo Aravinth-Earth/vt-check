@@ -97,7 +97,7 @@ def test_unknown_hash_is_not_clean(tmp_path, plugin, ctx, with_key, fake_http):
     p.write_bytes(b"brand new build")
     out = json.loads(ctx.tools["vt_check_file"]["handler"]({"path": str(p)}))
     assert out["verdict"] == "unknown"
-    assert "NOT the same as safe" in out["virustotal"]["why"]
+    assert "not proof of safety" in out["virustotal"]["why"]
 
 
 def test_local_alert_raises_verdict_even_when_vt_clean(tmp_path, plugin, ctx, with_key, fake_http):

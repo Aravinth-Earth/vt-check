@@ -23,7 +23,7 @@ RANK = {"clean": 0, "unknown": 1, "unverified": 2, "caution": 2, "suspicious": 3
 EXIT = {"clean": 0, "caution": 3, "suspicious": 1, "malicious": 1, "unknown": 2, "unverified": 2, "error": 2}
 FREE_TIER_GAP = 16.0   # 4 requests/min
 CACHE_TTL = 24 * 3600
-CACHE_VERSION = 2   # bump when verdict logic changes, so stale verdicts are re-derived
+CACHE_VERSION = 3   # bump when verdict logic changes, so stale verdicts are re-derived
 
 
 def _cache_path() -> Path:
@@ -227,8 +227,9 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"\n{name}  [{human(r.get('size', 0))}, {r.get('content_type', '?')}]")
                 print(f"  sha256  {r.get('sha256', '-')}")
+                glyph = {"alert": "!!", "warn": " !", "info": " · "}
                 for f in r.get("local_findings", []):
-                    print(f"  {'!!' if f['level'] == 'alert' else ' !'} {f['why']}")
+                    print(f"  {glyph.get(f['level'], ' · ')} {f['why']}")
                 if vtinfo:
                     print(f"   VT  {str(vtinfo.get('status', '')).upper()} — {why}")
                 print(f"  => {r['verdict'].upper()}")
