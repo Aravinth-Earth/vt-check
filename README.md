@@ -7,8 +7,14 @@ A Hermes plugin that answers two questions safely:
 - **"Is this link legit?"** → read-only VirusTotal URL reputation.
 
 ```bash
-hermes plugins install Aravinth-Earth/vt-check   # or: hermes plugins install vt-check (once listed)
+hermes plugins install vt-check                     # from the Hermes plugin catalog
 hermes plugins enable vt-check
+```
+
+To track this repo's `main` instead of the catalog's pinned commit:
+
+```bash
+hermes plugins install Aravinth-Earth/vt-check
 ```
 
 ## Command line (fastest path)
